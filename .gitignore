@@ -48,6 +48,24 @@ CMakeSettings.json
 .LSOverride
 .Spotlight-V100
 .Trashes
+._*
+Icon?
+__MACOSX/
+.DocumentRevisions-V100/
+.fseventsd/
+.TemporaryItems/
+.localized
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+*.dSYM/
+
+# Xcode/Swift package generated files
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+*.xcuserstate
+*.xcarchive/
 
 # Windows global filetypes
 Thumbs.db
