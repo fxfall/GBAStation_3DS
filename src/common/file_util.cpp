@@ -1520,6 +1520,22 @@ bool IOFile::Flush() {
     return m_good;
 }
 
+void IOFile::Clear() {
+    m_good = true;
+
+    if (m_romx != nullptr) {
+        // Keep ROMX payload streams consistent with regular IOFile streams.
+        m_romx->position = 0;
+        return;
+    }
+
+#ifdef HAVE_LIBRETRO_VFS
+    filestream_rewind(m_file);
+#else
+    std::clearerr(m_file);
+#endif
+}
+
 std::size_t IOFile::ReadImpl(void* data, std::size_t length, std::size_t data_size) {
     if (m_romx != nullptr) {
         if (length == 0 || data_size == 0)

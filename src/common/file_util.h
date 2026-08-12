@@ -490,19 +490,8 @@ public:
     virtual bool Resize(u64 size);
     virtual bool Flush();
 
-    // clear error state
-    virtual void Clear() {
-        m_good = true;
-
-        if (m_romx != nullptr)
-            return;
-
-#ifdef HAVE_LIBRETRO_VFS
-        filestream_rewind(m_file);
-#else
-        std::clearerr(m_file);
-#endif
-    }
+    // clear error state and rewind the logical stream
+    virtual void Clear();
 
     virtual bool IsCrypto() {
         return false;

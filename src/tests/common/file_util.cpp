@@ -99,6 +99,9 @@ TEST_CASE("IOFile exposes ROMX payload view", "[common][romx]") {
     REQUIRE(file.ReadBytes(tail.data(), tail.size()) == tail.size());
     REQUIRE(file.Tell() == payload.size());
 
+    file.Clear();
+    REQUIRE(file.Tell() == 0);
+
     file.Close();
     std::filesystem::remove_all(root, cleanup_error);
 }
