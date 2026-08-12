@@ -101,6 +101,7 @@ cmake -G Ninja -B "${BUILD_DIR}" "${SCRIPT_DIR}" \
     -DENABLE_VULKAN=ON \
     -DENABLE_SOFTWARE_RENDERER=OFF \
     -DENABLE_TESTS=OFF \
+    -DBUILD_TESTING=OFF \
     -DENABLE_WEB_SERVICE=OFF \
     -DENABLE_SCRIPTING=OFF \
     -DENABLE_CUBEB=OFF \
@@ -167,7 +168,7 @@ required_symbols=(
     nvkmd_nvgpu_alloc_mem
     nvkmd_nvgpu_alloc_va
     nvkmd_nvgpu_syncobj_type
-    nvkmd_nvgpu_syncobj_get_fence
+    nvkmd_nvgpu_syncobj_set_fence
 )
 
 DEFINED_SYMBOLS="${BUILD_DIR}/azahar-switch-defined-symbols${OUTPUT_SUFFIX}.txt"

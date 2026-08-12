@@ -116,7 +116,7 @@ endforeach()
 list(APPEND SWITCH_NVK_KEEP_SYMBOLS
     vk_icdGetInstanceProcAddr
     vk_icdNegotiateLoaderICDInterfaceVersion
-    nvkmd_nvgpu_syncobj_get_fence
+    nvkmd_nvgpu_syncobj_set_fence
     nvkmd_nvgpu_syncobj_type
     wsi_switch_init_wsi
     wsi_switch_finish_wsi

@@ -119,9 +119,23 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
     return result;
 }
 
-// Horizon has no setuid/AT_SECURE process model, so getenv is the secure variant here.
-char* secure_getenv(const char* name) {
-    return std::getenv(name);
+// Horizon has no setuid/AT_SECURE process model.  Mesa/NVK supplies the
+// secure_getenv fallback in its utility object; keep only one definition in
+// the final static link.
+
+// Newlib for Horizon exposes aligned_alloc/memalign but not the POSIX wrapper
+// used by Mesa's util_sparse_array and NVK memory manager.
+void* memalign(size_t alignment, size_t size);
+int posix_memalign(void** memptr, size_t alignment, size_t size) {
+    if (!memptr || alignment < sizeof(void*) || (alignment & (alignment - 1)) != 0) {
+        return EINVAL;
+    }
+    void* pointer = memalign(alignment, size);
+    if (!pointer) {
+        return ENOMEM;
+    }
+    *memptr = pointer;
+    return 0;
 }
 
 // Mesa's built-in driconf table supports regular-expression match fields even when XML
