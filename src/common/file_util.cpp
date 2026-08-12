@@ -17,6 +17,7 @@
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <fmt/format.h>
+#include <romx/romx.h>
 #include "common/archives.h"
 #include "common/assert.h"
 #include "common/common_funcs.h"
@@ -1244,6 +1245,17 @@ std::string SanitizePath(std::string_view path_, DirectorySeparator directory_se
     return std::string(RemoveTrailingSlash(path));
 }
 
+struct RomxIOFileImpl {
+    romx_reader_t* reader = nullptr;
+    romx_io_t payload_io = ROMX_IO_INIT;
+    u64 size = 0;
+    u64 position = 0;
+
+    ~RomxIOFileImpl() {
+        romx_reader_close(reader);
+    }
+};
+
 IOFile::IOFile() = default;
 
 IOFile::IOFile(const std::string& filename, const char openmode[], int flags)
@@ -1267,6 +1279,7 @@ IOFile& IOFile::operator=(IOFile&& other) noexcept {
 void IOFile::Swap(IOFile& other) noexcept {
     std::swap(m_file, other.m_file);
     std::swap(m_fd, other.m_fd);
+    std::swap(m_romx, other.m_romx);
     std::swap(m_good, other.m_good);
     std::swap(filename, other.filename);
     std::swap(openmode, other.openmode);
@@ -1275,6 +1288,28 @@ void IOFile::Swap(IOFile& other) noexcept {
 
 bool IOFile::Open() {
     Close();
+
+    // Expose only the footer-declared ROM region through the regular IOFile
+    // interface. Existing NCCH/3DSX code can therefore keep using normal
+    // seek/read operations without seeing ROMX metadata, cover, or footer.
+    const bool read_only = openmode.find('r') != std::string::npos &&
+                           openmode.find_first_of("wa+") == std::string::npos;
+    if (read_only && !filename.starts_with("fd://")) {
+        romx_reader_t* reader = nullptr;
+        romx_error_t error{};
+        if (romx_reader_open_path(filename.c_str(), nullptr, &reader, &error) == ROMX_OK) {
+            auto romx = std::make_unique<RomxIOFileImpl>();
+            romx->reader = reader;
+            if (romx_reader_get_payload_io(reader, &romx->payload_io, &error) == ROMX_OK &&
+                romx->payload_io.get_size(romx->payload_io.user_data, &romx->size, &error) ==
+                    ROMX_OK) {
+                m_romx = std::move(romx);
+                m_good = true;
+                return true;
+            }
+            // The local RAII object owns the reader on every failure path.
+        }
+    }
 
     // Any filename with the format fd://<file_descriptor> represents a file that
     // must be opened by duplicating the provided file_descriptor. This is used
@@ -1399,7 +1434,13 @@ bool IOFile::Open() {
 }
 
 bool IOFile::Close() {
-    if (!IsOpen() || 0 != FCLOSE(m_file))
+    if (m_romx != nullptr) {
+        m_romx.reset();
+        m_good = true;
+        return true;
+    }
+
+    if (m_file == nullptr || 0 != FCLOSE(m_file))
         m_good = false;
 
     m_file = nullptr;
@@ -1407,6 +1448,9 @@ bool IOFile::Close() {
 }
 
 u64 IOFile::GetSize() const {
+    if (m_romx != nullptr)
+        return m_romx->size;
+
     if (IsOpen())
         return FileUtil::GetSize(m_file);
 
@@ -1414,6 +1458,42 @@ u64 IOFile::GetSize() const {
 }
 
 bool IOFile::SeekImpl(s64 off, int origin) {
+    if (m_romx != nullptr) {
+        u64 base = 0;
+        switch (origin) {
+        case SEEK_SET:
+            break;
+        case SEEK_CUR:
+            base = m_romx->position;
+            break;
+        case SEEK_END:
+            base = m_romx->size;
+            break;
+        default:
+            m_good = false;
+            return false;
+        }
+
+        if (off >= 0) {
+            const auto delta = static_cast<u64>(off);
+            if (delta > std::numeric_limits<u64>::max() - base) {
+                m_good = false;
+                return false;
+            }
+            m_romx->position = base + delta;
+        } else {
+            // Avoid negating the minimum signed value directly.
+            const auto magnitude = static_cast<u64>(-(off + 1)) + 1;
+            if (magnitude > base) {
+                m_good = false;
+                return false;
+            }
+            m_romx->position = base - magnitude;
+        }
+        m_good = true;
+        return true;
+    }
+
     if (!IsOpen() || 0 != FSEEK(m_file, off, origin))
         m_good = false;
 
@@ -1421,6 +1501,9 @@ bool IOFile::SeekImpl(s64 off, int origin) {
 }
 
 u64 IOFile::TellImpl() const {
+    if (m_romx != nullptr)
+        return m_romx->position;
+
     if (IsOpen())
         return FTELL(m_file);
 
@@ -1428,6 +1511,9 @@ u64 IOFile::TellImpl() const {
 }
 
 bool IOFile::Flush() {
+    if (m_romx != nullptr)
+        return true;
+
     if (!IsOpen() || 0 != FFLUSH(m_file))
         m_good = false;
 
@@ -1435,6 +1521,28 @@ bool IOFile::Flush() {
 }
 
 std::size_t IOFile::ReadImpl(void* data, std::size_t length, std::size_t data_size) {
+    if (m_romx != nullptr) {
+        if (length == 0 || data_size == 0)
+            return 0;
+        if (length > std::numeric_limits<std::size_t>::max() / data_size) {
+            m_good = false;
+            return std::numeric_limits<std::size_t>::max();
+        }
+
+        const std::size_t requested_bytes = length * data_size;
+        std::uint64_t bytes_read = 0;
+        romx_error_t error{};
+        const auto result = m_romx->payload_io.read_at(
+            m_romx->payload_io.user_data, m_romx->position, data, requested_bytes,
+            &bytes_read, &error);
+        if (result != ROMX_OK) {
+            m_good = false;
+            return std::numeric_limits<std::size_t>::max();
+        }
+        m_romx->position += bytes_read;
+        return static_cast<std::size_t>(bytes_read / data_size);
+    }
+
     if (!IsOpen()) {
         m_good = false;
         return std::numeric_limits<std::size_t>::max();
@@ -1478,6 +1586,21 @@ static std::size_t pread(int fd, void* buf, std::size_t count, uint64_t offset) 
 #endif
 
 std::size_t IOFile::ReadAtImpl(void* data, std::size_t byte_count, std::size_t offset) {
+    if (m_romx != nullptr) {
+        if (byte_count == 0)
+            return 0;
+
+        std::uint64_t bytes_read = 0;
+        romx_error_t error{};
+        const auto result = m_romx->payload_io.read_at(
+            m_romx->payload_io.user_data, offset, data, byte_count, &bytes_read, &error);
+        if (result != ROMX_OK) {
+            m_good = false;
+            return std::numeric_limits<std::size_t>::max();
+        }
+        return static_cast<std::size_t>(bytes_read);
+    }
+
     if (!IsOpen()) {
         m_good = false;
         return std::numeric_limits<std::size_t>::max();
@@ -1502,6 +1625,11 @@ std::size_t IOFile::ReadAtImpl(void* data, std::size_t byte_count, std::size_t o
 }
 
 std::size_t IOFile::WriteImpl(const void* data, std::size_t length, std::size_t data_size) {
+    if (m_romx != nullptr) {
+        m_good = false;
+        return std::numeric_limits<std::size_t>::max();
+    }
+
     if (!IsOpen()) {
         m_good = false;
         return std::numeric_limits<std::size_t>::max();
@@ -1561,6 +1689,11 @@ size_t IOFile::WriteLine(const std::string_view line) {
 }
 
 bool IOFile::Resize(u64 size) {
+    if (m_romx != nullptr) {
+        m_good = false;
+        return false;
+    }
+
     if (!IsOpen() || 0 !=
 #if defined(HAVE_LIBRETRO_VFS)
                          filestream_truncate(m_file, size)

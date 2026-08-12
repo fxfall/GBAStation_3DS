@@ -1423,7 +1423,8 @@ bool EndsWithCiaExtension(std::string_view name) {
 
 bool IsCartridgeImagePath(std::string_view name) {
     return EndsWithNoCase(name, ".3ds") || EndsWithNoCase(name, ".z3ds") ||
-           EndsWithNoCase(name, ".cci") || EndsWithNoCase(name, ".zcci");
+           EndsWithNoCase(name, ".cci") || EndsWithNoCase(name, ".zcci") ||
+           EndsWithNoCase(name, ".ccix");
 }
 
 bool ReadCiaEntry(const std::string& path, CiaBrowserEntry& entry) {

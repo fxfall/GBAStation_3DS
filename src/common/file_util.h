@@ -294,6 +294,7 @@ enum class DirectorySeparator {
     DirectorySeparator directory_separator = DirectorySeparator::ForwardSlash);
 
 struct CryptoIOFileImpl;
+struct RomxIOFileImpl;
 
 // simple wrapper for cstdlib file functions to
 // hopefully will make error checking easier
@@ -450,7 +451,7 @@ public:
     size_t WriteLine(const std::string_view line);
 
     [[nodiscard]] virtual bool IsOpen() const {
-        return nullptr != m_file;
+        return nullptr != m_file || m_romx != nullptr;
     }
 
     // m_good is set to false when a read, write or other function fails
@@ -458,6 +459,8 @@ public:
         return m_good;
     }
     [[nodiscard]] virtual int GetFd() const {
+        if (m_romx != nullptr)
+            return -1;
 #ifdef HAVE_LIBRETRO_VFS
         if (m_file == nullptr)
             return -1;
@@ -491,6 +494,9 @@ public:
     virtual void Clear() {
         m_good = true;
 
+        if (m_romx != nullptr)
+            return;
+
 #ifdef HAVE_LIBRETRO_VFS
         filestream_rewind(m_file);
 #else
@@ -504,6 +510,11 @@ public:
 
     virtual bool IsCompressed() {
         return false;
+    }
+
+    /// Returns true when this handle exposes a ROMX payload instead of container bytes.
+    virtual bool IsRomx() const {
+        return m_romx != nullptr;
     }
 
     virtual const std::string& Filename() const {
@@ -525,6 +536,7 @@ protected:
 private:
     CORE_FILE* m_file = nullptr;
     int m_fd = -1;
+    std::unique_ptr<RomxIOFileImpl> m_romx;
     bool m_good = true;
 #ifdef HAVE_LIBRETRO_VFS
     // pread() doesn't touch the file position, so it's safe alongside

@@ -47,6 +47,17 @@ FileType IdentifyFile(const std::string& file_name) {
 FileType GuessFromExtension(const std::string& extension_) {
     std::string extension = Common::ToLower(extension_);
 
+    // ROMX aliases retain the payload extension with an additional x suffix.
+    // The actual type is still identified from the virtual payload, but this
+    // keeps extension-based fallback and diagnostics correct when detection
+    // has to run before the payload header is available.
+    if (extension == ".ccix")
+        extension = ".cci";
+    else if (extension == ".cxix" || extension == ".appx")
+        extension = ".cxi";
+    else if (extension == ".ciax")
+        extension = ".cia";
+
     if (extension == ".elf" || extension == ".axf")
         return FileType::ELF;
 

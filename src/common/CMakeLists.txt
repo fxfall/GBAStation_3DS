@@ -152,7 +152,7 @@ endif()
 
 create_target_directory_groups(citra_common)
 
-target_link_libraries(citra_common PUBLIC fmt library-headers microprofile Boost::boost Boost::serialization Boost::iostreams)
+target_link_libraries(citra_common PUBLIC fmt library-headers microprofile Boost::boost Boost::serialization Boost::iostreams ROMX::romx)
 target_link_libraries(citra_common PRIVATE cryptopp zstd)
 
 if ("x86_64" IN_LIST ARCHITECTURE)

@@ -19,6 +19,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/CMakeModules)
 include(DownloadExternals)
 include(ExternalProject)
 
+# ROMX is kept as a normal vendored source tree so standalone Switch NRO and
+# desktop Azahar builds use the same footer parser and payload I/O adapter.
+set(ROMX_BUILD_TESTS OFF CACHE BOOL "Build libromx tests")
+set(ROMX_BUILD_EXAMPLES OFF CACHE BOOL "Build libromx examples")
+add_subdirectory(libromx EXCLUDE_FROM_ALL)
+
 # Boost
 if (USE_SYSTEM_BOOST)
     unset(BOOST_ROOT CACHE)

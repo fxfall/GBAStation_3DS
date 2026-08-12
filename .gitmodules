@@ -133,3 +133,6 @@
 [submodule "externals/cryptopp"]
 	path = externals/cryptopp
 	url = https://github.com/cryptopp-modern/cryptopp-modern.git
+[submodule "externals/libromx"]
+	path = externals/libromx
+	url = https://github.com/fxfall/libromx.git
