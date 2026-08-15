@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <vector>
 #include "common/logging/log.h"
+#include "common/romx_io_file.h"
 #include "common/zstd_compression.h"
 #include "core/core.h"
 #include "core/hle/kernel/process.h"
@@ -249,7 +250,8 @@ static THREEDSX_Error Load3DSXFile(Core::System& system, FileUtil::IOFile* file,
     return ERROR_NONE;
 }
 
-AppLoader_THREEDSX::AppLoader_THREEDSX(Core::System& system_, FileUtil::IOFile&& file,
+AppLoader_THREEDSX::AppLoader_THREEDSX(Core::System& system_,
+                                       std::unique_ptr<FileUtil::IOFile> file,
                                        const std::string& filename, const std::string& filepath)
     : AppLoader(system_, std::move(file)), filename(filename), filepath(filepath) {
 
@@ -330,8 +332,7 @@ ResultStatus AppLoader_THREEDSX::ReadRomFS(std::shared_ptr<FileSys::RomFSReader>
         LOG_DEBUG(Loader, "RomFS size:             {:#010X}", romfs_size);
 
         // We reopen the file, to allow its position to be independent from file's
-        std::unique_ptr<FileUtil::IOFile> romfs_file_inner =
-            std::make_unique<FileUtil::IOFile>(filepath, "rb");
+        std::unique_ptr<FileUtil::IOFile> romfs_file_inner = FileUtil::OpenContentFile(filepath);
         if (!romfs_file_inner->IsOpen())
             return ResultStatus::Error;
 

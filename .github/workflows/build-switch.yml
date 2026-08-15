@@ -26,7 +26,7 @@ jobs:
         id: switchvk-release
         shell: bash
         env:
-          SWITCHVK_TOKEN: ${{ secrets.SWITCHVK_READ_TOKEN }}
+          SWITCHVK_TOKEN: ${{ secrets.SWITCHVK_READ_TOKEN || github.token }}
           SWITCHVK_VARIANT: release
         run: bash ci/fetch-switchvk.sh "$RUNNER_TEMP/switchvk-sdk-release"
 
@@ -38,7 +38,7 @@ jobs:
         id: switchvk-diagnostic
         shell: bash
         env:
-          SWITCHVK_TOKEN: ${{ secrets.SWITCHVK_READ_TOKEN }}
+          SWITCHVK_TOKEN: ${{ secrets.SWITCHVK_READ_TOKEN || github.token }}
           SWITCHVK_VARIANT: diagnostic
         run: bash ci/fetch-switchvk.sh "$RUNNER_TEMP/switchvk-sdk-diagnostic"
 

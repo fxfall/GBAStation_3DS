@@ -18,8 +18,8 @@ namespace Loader {
 /// Loads an 3DSX file
 class AppLoader_THREEDSX final : public AppLoader {
 public:
-    AppLoader_THREEDSX(Core::System& system_, FileUtil::IOFile&& file, const std::string& filename,
-                       const std::string& filepath);
+    AppLoader_THREEDSX(Core::System& system_, std::unique_ptr<FileUtil::IOFile> file,
+                       const std::string& filename, const std::string& filepath);
 
     /**
      * Returns the type of the file

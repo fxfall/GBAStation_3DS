@@ -559,6 +559,12 @@ endif()
 
 enable_testing()
 add_subdirectory(externals)
+# libromx is consumed as an embedded runtime library. Its standalone tests
+# and examples are not part of the emulator (and are not portable to the
+# Switch toolchain), so keep them out of all frontend builds.
+set(ROMX_BUILD_TESTS OFF CACHE BOOL "Disable embedded libromx tests" FORCE)
+set(ROMX_BUILD_EXAMPLES OFF CACHE BOOL "Disable embedded libromx examples" FORCE)
+add_subdirectory(third_party/libromx EXCLUDE_FROM_ALL)
 
 # Boost (bundled)
 if (NOT USE_SYSTEM_BOOST)

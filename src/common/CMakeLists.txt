@@ -34,6 +34,8 @@ add_library(citra_common STATIC EXCLUDE_FROM_ALL
     expected.h
     file_util.cpp
     file_util.h
+    romx_io_file.cpp
+    romx_io_file.h
     hash.h
     hacks/hack_list.h
     hacks/hack_list.cpp
@@ -153,6 +155,7 @@ endif()
 create_target_directory_groups(citra_common)
 
 target_link_libraries(citra_common PUBLIC fmt library-headers microprofile Boost::boost Boost::serialization Boost::iostreams)
+target_link_libraries(citra_common PRIVATE ROMX::romx)
 target_link_libraries(citra_common PRIVATE cryptopp zstd)
 
 if ("x86_64" IN_LIST ARCHITECTURE)

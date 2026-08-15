@@ -80,7 +80,7 @@ def main() -> int:
             lock.write_text(
                 "\n".join(
                     [
-                        'SWITCHVK_REPOSITORY="beiklive/switchVK"',
+                        'SWITCHVK_REPOSITORY="fxfall/switchVK"',
                         "",
                     ]
                 ),

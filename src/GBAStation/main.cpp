@@ -44,6 +44,7 @@
 #include "common/file_util.h"
 #include "common/logging/backend.h"
 #include "common/param_package.h"
+#include "common/romx_io_file.h"
 #include "common/settings.h"
 #include "common/string_util.h"
 #include "common/thread.h"
@@ -1422,8 +1423,19 @@ bool EndsWithCiaExtension(std::string_view name) {
 }
 
 bool IsCartridgeImagePath(std::string_view name) {
-    return EndsWithNoCase(name, ".3ds") || EndsWithNoCase(name, ".z3ds") ||
-           EndsWithNoCase(name, ".cci") || EndsWithNoCase(name, ".zcci");
+    if (EndsWithNoCase(name, ".3ds") || EndsWithNoCase(name, ".z3ds") ||
+        EndsWithNoCase(name, ".cci") || EndsWithNoCase(name, ".zcci")) {
+        return true;
+    }
+
+    // A ROMX path has no cartridge extension, so inspect its entrypoint. The
+    // factory returns a payload-only view and each caller gets its own reader.
+    if (EndsWithNoCase(name, ".romx")) {
+        auto file = FileUtil::OpenContentFile(std::string(name));
+        return file && file->IsOpen() && Loader::IdentifyFile(*file) == Loader::FileType::CCI;
+    }
+
+    return false;
 }
 
 bool ReadCiaEntry(const std::string& path, CiaBrowserEntry& entry) {

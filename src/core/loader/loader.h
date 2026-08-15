@@ -96,8 +96,14 @@ public:
         std::unordered_map<std::string, std::vector<u8>> default_metadata;
     };
 
+    explicit AppLoader(Core::System& system_, std::unique_ptr<FileUtil::IOFile> file_)
+        : system(system_), file(std::move(file_)) {}
+
+    // Keep this overload for loaders that do not own a content file (for
+    // example the ARTIC loader). Content loaders use the unique_ptr overload
+    // so a RomxIOFile is not sliced to IOFile.
     explicit AppLoader(Core::System& system_, FileUtil::IOFile&& file)
-        : system(system_), file(std::make_unique<FileUtil::IOFile>(std::move(file))) {}
+        : AppLoader(system_, std::make_unique<FileUtil::IOFile>(std::move(file))) {}
     virtual ~AppLoader() {}
 
     /**

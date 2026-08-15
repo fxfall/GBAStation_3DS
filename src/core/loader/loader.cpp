@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include "common/logging/log.h"
+#include "common/romx_io_file.h"
 #include "common/string_util.h"
 #include "common/zstd_compression.h"
 #include "core/core.h"
@@ -35,13 +36,13 @@ FileType IdentifyFile(FileUtil::IOFile& file) {
 }
 
 FileType IdentifyFile(const std::string& file_name) {
-    FileUtil::IOFile file(file_name, "rb");
-    if (!file.IsOpen()) {
+    auto file = FileUtil::OpenContentFile(file_name);
+    if (!file || !file->IsOpen()) {
         LOG_ERROR(Loader, "Failed to load file {}", file_name);
         return FileType::Unknown;
     }
 
-    return IdentifyFile(file);
+    return IdentifyFile(*file);
 }
 
 FileType GuessFromExtension(const std::string& extension_) {
@@ -95,7 +96,8 @@ const char* GetFileTypeString(FileType type, bool is_compressed) {
  * @param filepath the file full path (with name)
  * @return std::unique_ptr<AppLoader> a pointer to a loader object;  nullptr for unsupported type
  */
-static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileUtil::IOFile&& file,
+static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system,
+                                                std::unique_ptr<FileUtil::IOFile> file,
                                                 FileType type, const std::string& filename,
                                                 const std::string& filepath) {
     switch (type) {
@@ -149,12 +151,12 @@ static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileUtil::
 std::unique_ptr<AppLoader> GetLoader(const std::string& filename) {
     if (filename.starts_with("articbase://") || filename.starts_with("articinio://") ||
         filename.starts_with("articinin://")) {
-        return GetFileLoader(Core::System::GetInstance(), FileUtil::IOFile(), FileType::ARTIC,
-                             filename, "");
+        return GetFileLoader(Core::System::GetInstance(), std::make_unique<FileUtil::IOFile>(),
+                             FileType::ARTIC, filename, "");
     }
 
-    FileUtil::IOFile file(filename, "rb");
-    if (!file.IsOpen()) {
+    auto file = FileUtil::OpenContentFile(filename);
+    if (!file || !file->IsOpen()) {
         LOG_ERROR(Loader, "Failed to load file {}", filename);
         return nullptr;
     }
@@ -162,10 +164,11 @@ std::unique_ptr<AppLoader> GetLoader(const std::string& filename) {
     std::string filename_filename, filename_extension;
     Common::SplitPath(filename, nullptr, &filename_filename, &filename_extension);
 
-    FileType type = IdentifyFile(file);
+    FileType type = IdentifyFile(*file);
     FileType filename_type = GuessFromExtension(filename_extension);
+    const bool is_romx = Common::ToLower(filename_extension) == ".romx";
 
-    if (type != filename_type) {
+    if (type != filename_type && !is_romx) {
         // Do not show the error for CIA files, as their type cannot be determined.
         if (!(type == FileType::Unknown && filename_type == FileType::CIA)) {
             LOG_WARNING(Loader, "File {} has a different type than its extension.", filename);

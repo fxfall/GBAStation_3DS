@@ -9,6 +9,7 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/sha.h>
 #include "common/common_types.h"
+#include "common/romx_io_file.h"
 #include "common/logging/log.h"
 #include "common/zstd_compression.h"
 #include "core/core.h"
@@ -114,7 +115,7 @@ static bool LZSS_Decompress(std::span<const u8> compressed, std::span<u8> decomp
 
 NCCHContainer::NCCHContainer(const std::string& filepath, u32 ncch_offset, u32 partition)
     : ncch_offset(ncch_offset), partition(partition), filepath(filepath) {
-    file = std::make_unique<FileUtil::IOFile>(filepath, "rb");
+    file = FileUtil::OpenContentFile(filepath);
 }
 
 Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath_, u32 ncch_offset_,
@@ -122,7 +123,7 @@ Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath_, u32 n
     filepath = filepath_;
     ncch_offset = ncch_offset_;
     partition = partition_;
-    file = std::make_unique<FileUtil::IOFile>(filepath_, "rb");
+    file = FileUtil::OpenContentFile(filepath_);
 
     if (!file->IsOpen()) {
         LOG_WARNING(Service_FS, "Failed to open {}", filepath);
@@ -783,7 +784,7 @@ std::unique_ptr<FileUtil::IOFile> NCCHContainer::Reopen(
         out_file = HW::UniqueData::OpenUniqueCryptoFile(filename, "rb",
                                                         HW::UniqueData::UniqueCryptoFileID::NCCH);
     } else {
-        out_file = std::make_unique<FileUtil::IOFile>(filename, "rb");
+        out_file = FileUtil::OpenContentFile(filename);
     }
     if (is_compressed) {
         out_file = std::make_unique<FileUtil::Z3DSReadIOFile>(std::move(out_file));
