@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <dirent.h>
 #include <fcntl.h>
+#include <malloc.h>
 #include <new>
 #include <pwd.h>
 #include <regex.h>
@@ -120,8 +121,26 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 }
 
 // Horizon has no setuid/AT_SECURE process model, so getenv is the secure variant here.
-char* secure_getenv(const char* name) {
+// Keep this fallback weak: recent switchVK archives provide Mesa's own
+// secure_getenv implementation and must win without a duplicate definition.
+__attribute__((weak)) char* secure_getenv(const char* name) {
     return std::getenv(name);
+}
+
+// newlib exposes aligned_alloc/memalign but not the POSIX wrapper used by
+// Mesa's portable utility code.  Export a weak adapter for the Switch link;
+// a future libc implementation can override it.
+__attribute__((weak)) int posix_memalign(void** memory, size_t alignment, size_t size) {
+    if (memory == nullptr || alignment < sizeof(void*) ||
+        (alignment & (alignment - 1U)) != 0U) {
+        return EINVAL;
+    }
+    void* pointer = memalign(alignment, size);
+    if (pointer == nullptr) {
+        return ENOMEM;
+    }
+    *memory = pointer;
+    return 0;
 }
 
 // Mesa's built-in driconf table supports regular-expression match fields even when XML

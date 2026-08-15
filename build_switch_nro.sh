@@ -166,7 +166,7 @@ required_symbols=(
     nvkmd_nvgpu_alloc_mem
     nvkmd_nvgpu_alloc_va
     nvkmd_nvgpu_syncobj_type
-    nvkmd_nvgpu_syncobj_get_fence
+    nvkmd_nvgpu_syncobj_set_fence
 )
 
 DEFINED_SYMBOLS="${BUILD_DIR}/azahar-switch-defined-symbols${OUTPUT_SUFFIX}.txt"
