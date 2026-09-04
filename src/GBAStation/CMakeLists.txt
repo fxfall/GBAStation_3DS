@@ -137,7 +137,6 @@ message(STATUS
 target_link_libraries(gbastation PRIVATE
     citra_common
     citra_core
-    ROMX::romx
     audio_core
     video_core
     network

@@ -1,4 +1,4 @@
-name: Build GBAStation 3DS for Nintendo Switch
+name: Build GBAStation 3DS cores
 
 on:
   workflow_dispatch:
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   build-switch:
+    name: Nintendo Switch NRO
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -21,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Fetch latest release switchVK SDK
         id: switchvk-release
@@ -46,22 +48,116 @@ jobs:
         shell: bash
         run: bash build_switch_nro.sh clean diagnostic
 
+      - name: Verify Nintendo Switch build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s GBAStation3DSStub.nro
+          test -s GBAStation3DSStub-diagnostic.nro
+          sha256sum GBAStation3DSStub.nro > GBAStation3DSStub.nro.sha256
+          sha256sum GBAStation3DSStub-diagnostic.nro > GBAStation3DSStub-diagnostic.nro.sha256
+
       - name: Upload Nintendo Switch build
         uses: actions/upload-artifact@v4
         with:
           name: GBAStation-3DS-Switch-${{ github.sha }}
           path: |
             GBAStation3DSStub.nro
+            GBAStation3DSStub.nro.sha256
             GBAStation3DSStub-diagnostic.nro
+            GBAStation3DSStub-diagnostic.nro.sha256
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload Nintendo Switch build to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  build-macos:
+    name: macOS 26 arm64 libretro core
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+    steps:
+      - name: Check out GBAStation_3DS source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install macOS build tools
+        shell: bash
+        run: brew install cmake ninja
+
+      - name: Configure macOS libretro core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build_macos_libretro -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 \
+            -DENABLE_LIBRETRO=ON \
+            -DENABLE_VULKAN=ON \
+            -DENABLE_QT=OFF \
+            -DENABLE_SDL2=OFF \
+            -DENABLE_WEB_SERVICE=OFF \
+            -DENABLE_SCRIPTING=OFF \
+            -DENABLE_GDBSTUB=OFF \
+            -DENABLE_OPENAL=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_LIBUSB=OFF \
+            -DENABLE_ROOM=OFF \
+            -DENABLE_ROOM_STANDALONE=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_DISCORD_RPC=OFF \
+            -DENABLE_MICROPROFILE=OFF \
+            -DENABLE_LTO=OFF \
+            -DCITRA_USE_PRECOMPILED_HEADERS=OFF
+
+      - name: Build macOS libretro core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build_macos_libretro --target citra_libretro --parallel 3
+          core_path="$(find build_macos_libretro -type f -name azahar_libretro.dylib -print -quit)"
+          test -n "$core_path"
+          test -s "$core_path"
+          cp "$core_path" azahar_libretro.dylib
+          shasum -a 256 azahar_libretro.dylib > azahar_libretro.dylib.sha256
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBAStation-3DS-macOS-${{ github.sha }}
+          path: |
+            azahar_libretro.dylib
+            azahar_libretro.dylib.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish core release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-switch
+      - build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          generate_release_notes: true
           files: |
-            GBAStation3DSStub.nro
-            GBAStation3DSStub-diagnostic.nro
+            release-assets/GBAStation3DSStub.nro
+            release-assets/GBAStation3DSStub.nro.sha256
+            release-assets/GBAStation3DSStub-diagnostic.nro
+            release-assets/GBAStation3DSStub-diagnostic.nro.sha256
+            release-assets/azahar_libretro.dylib
+            release-assets/azahar_libretro.dylib.sha256
