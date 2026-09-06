@@ -10,6 +10,12 @@ DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 TOOLCHAIN_FILE="${SCRIPT_DIR}/CMakeModules/SwitchToolchain.cmake"
 export PATH="${DEVKITPRO}/tools/bin:${DEVKITPRO}/devkitA64/bin:${PATH}"
 
+SWITCHVK_HELPER="${SCRIPT_DIR}/../switchVK/switchvk-version.sh"
+if [ -f "${SWITCHVK_HELPER}" ]; then
+	# shellcheck disable=SC1090
+	source "${SWITCHVK_HELPER}"
+fi
+
 BUILD_VARIANT="release"
 CLEAN_BUILD=0
 for arg in "$@"; do
@@ -54,15 +60,22 @@ if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
 fi
 
 if [ -z "${SWITCH_NVK_ROOT:-}" ]; then
-    for candidate in \
-        "${SCRIPT_DIR}/../switchVK/nvk-switch-26.1.4" \
-        "${SCRIPT_DIR}/../switch-nvk/nvk-switch-26.1.4" \
-        "/opt/nvk-switch"; do
-        if [ -f "${candidate}/lib/libvulkan.a" ]; then
-            SWITCH_NVK_ROOT="$(cd "${candidate}" && pwd)"
-            break
-        fi
-    done
+	if command -v switchvk_find_sdk >/dev/null 2>&1; then
+		for sibling in "${SCRIPT_DIR}/../switchVK" "${SCRIPT_DIR}/../switch-nvk"; do
+			[ -d "${sibling}" ] || continue
+			SWITCH_NVK_ROOT="$(switchvk_find_sdk "${sibling}" "${BUILD_VARIANT}" || true)"
+			[ -n "${SWITCH_NVK_ROOT}" ] && break
+		done
+	fi
+	if [ -z "${SWITCH_NVK_ROOT:-}" ] && [ -f "/opt/nvk-switch/lib/libvulkan.a" ]; then
+		SWITCH_NVK_ROOT="$(cd /opt/nvk-switch && pwd)"
+	fi
+fi
+
+MESA_VERSION=""
+if [ -n "${SWITCH_NVK_ROOT:-}" ] && [ -f "${SWITCH_NVK_ROOT}/metadata.json" ]; then
+	MESA_VERSION="$(sed -n 's/^[[:space:]]*"mesa":[[:space:]]*"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
+		"${SWITCH_NVK_ROOT}/metadata.json" | head -1)"
 fi
 
 if [ "${CLEAN_BUILD}" -eq 1 ]; then
@@ -116,7 +129,12 @@ cmake -G Ninja -B "${BUILD_DIR}" "${SCRIPT_DIR}" \
     -DGBASTATION_HOTPATH_DIAGNOSTICS="${HOTPATH_DIAGNOSTICS}" \
     "${CMAKE_EXTRA_ARGS[@]}"
 
-cmake --build "${BUILD_DIR}" --target gbastation -j"$(nproc)"
+if command -v switchvk_default_jobs >/dev/null 2>&1; then
+	BUILD_JOBS="$(switchvk_default_jobs)"
+else
+	BUILD_JOBS="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+fi
+cmake --build "${BUILD_DIR}" --target gbastation -j"${BUILD_JOBS}"
 
 ELF_FILE="${BUILD_DIR}/src/GBAStation/azahar-switch.elf"
 if [ ! -f "${ELF_FILE}" ]; then
@@ -193,7 +211,11 @@ if grep -Eqi 'drm_shim|drm_nouveau|GLESv2|libglapi|allow-multiple-definition' \
     exit 1
 fi
 
-for identity in 'Mesa 26.1.4' 'NVIDIA Tegra X1'; do
+identities=('NVIDIA Tegra X1')
+if [ -n "${MESA_VERSION}" ]; then
+	identities+=("Mesa ${MESA_VERSION}")
+fi
+for identity in "${identities[@]}"; do
     if ! "${STRINGS}" "${NRO_FILE}" | grep -F "${identity}" >/dev/null; then
         echo "ERROR: final NRO is missing identity string: ${identity}" >&2
         exit 1
@@ -206,7 +228,11 @@ done
     echo "Undefined ELF symbols: 0"
     echo "Forbidden DRM/OpenGL link dependencies: 0"
     echo "Multiple-definition linker fallback: absent"
-    echo "Mesa identity: 26.1.4 raw nvkmd/nvgpu"
+	if [ -n "${MESA_VERSION}" ]; then
+		echo "Mesa identity: ${MESA_VERSION} raw nvkmd/nvgpu"
+	else
+		echo "Mesa identity: package metadata unavailable"
+	fi
 } > "${AUDIT_LOG}"
 
 hash_files=(

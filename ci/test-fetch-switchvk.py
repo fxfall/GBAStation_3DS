@@ -10,6 +10,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 
@@ -37,7 +38,7 @@ def main() -> int:
             if self.path.endswith("/releases/latest"):
                 payload = json.dumps(
                     {
-                        "tag_name": "switchvk-mesa-26.1.4-test",
+                        "tag_name": "switchvk-mesa-test",
                         "assets": [
                             {"name": archive_name, "url": f"{api_root}/assets/1"},
                             {"name": checksum_name, "url": f"{api_root}/assets/2"},
@@ -120,7 +121,11 @@ def main() -> int:
                 env=env,
                 check=True,
             )
-            library = destination / "nvk-switch-26.1.4/lib/libvulkan.a"
+            with tarfile.open(archive, "r:xz") as stream:
+                roots = {pathlib.PurePosixPath(member.name).parts[0] for member in stream.getmembers()}
+            if len(roots) != 1:
+                raise RuntimeError(f"unexpected archive roots: {roots}")
+            library = destination / roots.pop() / "lib/libvulkan.a"
             if not library.is_file():
                 raise RuntimeError("fetch test did not install libvulkan.a")
     finally:
